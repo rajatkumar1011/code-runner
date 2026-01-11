@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyRun</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0f;
+            --glass: rgba(255,255,255,0.03);
+            --border: rgba(255,255,255,0.08);
+            --text: #fff;
+            --text2: rgba(255,255,255,0.7);
+            --text3: rgba(255,255,255,0.4);
+            --blue: #4f8cff;
+            --purple: #a855f7;
+            --green: #10b981;
+            --red: #ef4444;
+        }
+        body { font-family: Inter, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .bg { position: fixed; inset: 0; z-index: 0; background: radial-gradient(at 20% 20%, rgba(168,85,247,0.1) 0%, transparent 50%), radial-gradient(at 80% 80%, rgba(79,140,255,0.08) 0%, transparent 50%); }
+        .container { position: relative; z-index: 1; padding: 1.5rem; height: 100vh; display: flex; flex-direction: column; }
+        .layout { display: grid; grid-template-columns: 70fr 30fr; gap: 1.5rem; flex: 1; min-height: 0; }
+        .panel { background: var(--glass); border: 1px solid var(--border); border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
+        .header { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
+        .dots { display: flex; gap: 6px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot:nth-child(1) { background: #ff5f57; }
+        .dot:nth-child(2) { background: #febc2e; }
+        .dot:nth-child(3) { background: #28c840; }
+        .status { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; color: var(--text2); padding: 4px 10px; background: var(--glass); border: 1px solid var(--border); border-radius: 20px; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #fbbf24; animation: pulse 1.5s infinite; }
+        .status-dot.ready { background: var(--green); animation: none; box-shadow: 0 0 8px var(--green); }
+        .status-dot.error { background: var(--red); animation: none; }
+        @keyframes pulse { 50% { opacity: 0.4; } }
+        .code-area { flex: 1; padding: 1rem; overflow: hidden; }
+        #editor { width: 100%; height: 100%; background: transparent; border: none; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; resize: none; outline: none; }
+        #editor::placeholder { color: var(--text3); }
+        .actions { display: flex; justify-content: space-between; padding: 0.75rem 1rem; border-top: 1px solid var(--border); }
+        .btn { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border: none; border-radius: 8px; font-family: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+        .btn-run { background: linear-gradient(135deg, #667eea, #764ba2, #f093fb); color: #fff; box-shadow: 0 4px 15px rgba(168,85,247,0.4); }
+        .btn-run:hover:not(:disabled) { transform: translateY(-1px); }
+        .btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-sec { background: var(--glass); color: var(--text2); border: 1px solid var(--border); }
+        .btn-sec:hover { background: rgba(255,255,255,0.08); }
+        .out-section { display: flex; flex-direction: column; min-height: 0; }
+        .out-title { font-size: 0.7rem; color: var(--text3); text-transform: uppercase; margin-bottom: 8px; }
+        .out-card { background: var(--glass); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; flex: 1; overflow: auto; }
+        #output { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.6; color: var(--text2); white-space: pre-wrap; word-break: break-word; }
+        .ph { color: var(--text3); font-style: italic; }
+        .err { color: var(--red); }
+        .inp-p { color: var(--blue); }
+        .inp-v { color: var(--purple); }
+        #inputBox { margin-top: 8px; }
+        .inp { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--blue); border-radius: 6px; padding: 8px 10px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; outline: none; }
+        .inp:focus { border-color: var(--purple); box-shadow: 0 0 0 2px rgba(168,85,247,0.15); }
+        .examples { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+        .examples span { font-size: 0.65rem; color: var(--text3); }
+        .ex { padding: 4px 8px; background: var(--glass); border: 1px solid var(--border); border-radius: 4px; color: var(--text2); font-size: 0.65rem; cursor: pointer; }
+        .ex:hover { background: rgba(255,255,255,0.08); }
+        .spin { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
+        .footer { text-align: center; padding: 1.5rem 1rem 1rem; margin-top: auto; }
+        .social-links { display: flex; justify-content: center; gap: 1rem; margin-bottom: 0.75rem; }
+        .social-links a { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: var(--glass); border: 1px solid var(--border); border-radius: 10px; color: var(--text2); transition: all 0.2s ease; }
+        .social-links a:hover { background: rgba(255,255,255,0.08); color: var(--text); transform: translateY(-2px); }
+        .social-links svg { width: 20px; height: 20px; fill: currentColor; }
+        .made-with { font-size: 0.8rem; color: var(--text2); margin-bottom: 0.25rem; }
+        .made-with .heart { color: #ef4444; }
+        .copyright { font-size: 0.65rem; color: var(--text3); }
+    </style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="container">
+    <main class="layout">
+        <div class="panel">
+            <div class="header">
+                <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                <div class="status"><span class="status-dot" id="sDot"></span><span id="sTxt">Loading...</span></div>
+                <div></div>
+            </div>
+            <div class="code-area">
+                <textarea id="editor" spellcheck="false" placeholder="# Write Python here...">print("Hello, World!")
+
+name = "Developer"  
+print(f"Welcome, {name}!")
+
+nums = [1, 2, 3, 4, 5]
+print(f"Sum: {sum(nums)}")</textarea>
+            </div>
+            <div class="actions">
+                <button class="btn btn-sec" onclick="clr()">Clear</button>
+                <button class="btn btn-run" id="runBtn" onclick="run()" disabled>Run</button>
+            </div>
+        </div>
+        <div class="out-section">
+            <div class="out-title">Output</div>
+            <div class="out-card" id="outCard">
+                <div id="output"><span class="ph">Output here...</span></div>
+                <div id="inputBox"></div>
+            </div>
+            <div class="examples">
+                <span>Try:</span>
+                <button class="ex" onclick="ex('hello')">Hello</button>
+                <button class="ex" onclick="ex('input')">Input</button>
+                <button class="ex" onclick="ex('math')">Math</button>
+                <button class="ex" onclick="ex('loop')">Loop</button>
+            </div>
+        </div>
+    </main>
+    <footer class="footer">
+        <div class="social-links">
+            <a href="https://www.linkedin.com/in/rajatkumar7/" target="_blank" rel="noopener noreferrer" title="LinkedIn">
+                <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+            </a>
+            <a href="https://github.com/rajatkumar1011" target="_blank" rel="noopener noreferrer" title="GitHub">
+                <svg viewBox="0 0 24 24"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+            </a>
+        </div>
+        <p class="made-with">Made with <span class="heart">❤️</span> by Rajat Kumar</p>
+        <p class="copyright">Copyright © 2026 Rajat Kumar. All Rights Reserved.</p>
+    </footer>
+</div>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+<script>
+let py = null;
+
+const EX = {
+    hello: 'print("Hello World!")\nprint("Welcome to PyRun!")',
+    input: 'name = input("What is your name? ")\nprint(f"Hello, {name}!")\n\nage = input("How old are you? ")\nprint(f"You are {age} years old!")',
+    math: 'import math\nprint(f"pi = {math.pi:.4f}")\nfor i in range(1, 6):\n    print(f"{i}^2 = {i**2}")',
+    loop: 'for i in range(5):\n    print("*" * (i + 1))\n\nprint()\na, b = 0, 1\nfor _ in range(10):\n    print(a, end=" ")\n    a, b = b, a + b'
+};
+
+function write(text, cls) {
+    const out = document.getElementById('output');
+    const ph = out.querySelector('.ph');
+    if (ph) ph.remove();
+    const span = document.createElement('span');
+    if (cls) span.className = cls;
+    span.textContent = text;
+    out.appendChild(span);
+    document.getElementById('outCard').scrollTop = 99999;
+}
+
+function getInput(promptText) {
+    return new Promise(resolve => {
+        if (promptText) write(promptText, 'inp-p');
+        
+        const container = document.getElementById('inputBox');
+        const input = document.createElement('input');
+        input.className = 'inp';
+        input.placeholder = 'Type here and press Enter...';
+        container.appendChild(input);
+        input.focus();
+        document.getElementById('outCard').scrollTop = 99999;
+        
+        input.onkeydown = function(e) {
+            if (e.key === 'Enter') {
+                const value = input.value;
+                container.innerHTML = '';
+                write(value + '\n', 'inp-v');
+                resolve(value);
+            }
+        };
+    });
+}
+
+async function init() {
+    try {
+        py = await loadPyodide({
+            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/'
+        });
+        
+        globalThis.browserInput = getInput;
+        
+        document.getElementById('sDot').classList.add('ready');
+        document.getElementById('sTxt').textContent = 'Ready';
+        document.getElementById('runBtn').disabled = false;
+    } catch (e) {
+        console.error(e);
+        document.getElementById('sDot').classList.add('error');
+        document.getElementById('sTxt').textContent = location.protocol === 'file:' ? 'Use server' : 'Failed';
+    }
+}
+
+async function run() {
+    if (!py) return;
+    
+    const code = document.getElementById('editor').value;
+    const out = document.getElementById('output');
+    const inputBox = document.getElementById('inputBox');
+    const btn = document.getElementById('runBtn');
+    
+    out.innerHTML = '';
+    inputBox.innerHTML = '';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>';
+    
+    try {
+        // Setup Python environment with proper output and input
+        await py.runPythonAsync(`
+import sys
+from js import browserInput, document
+
+class Output:
+    def write(self, text):
+        if text:
+            out = document.getElementById('output')
+            ph = out.querySelector('.ph')
+            if ph:
+                ph.remove()
+            span = document.createElement('span')
+            span.textContent = str(text)
+            out.appendChild(span)
+            document.getElementById('outCard').scrollTop = 99999
+    def flush(self):
+        pass
+
+sys.stdout = Output()
+sys.stderr = Output()
+
+# This is the key fix - async input that returns awaited result
+async def _async_input_(prompt=""):
+    result = await browserInput(prompt)
+    return result
+`);
+
+        // Transform user code: add await before input() calls
+        let transformedCode = code.replace(/\binput\s*\(/g, 'await _async_input_(');
+        
+        // Wrap in async function
+        const wrappedCode = `
+async def __main__():
+${transformedCode.split('\n').map(line => '    ' + line).join('\n')}
+
+await __main__()
+`;
+        
+        await py.runPythonAsync(wrappedCode);
+        
+        if (!out.textContent) {
+            out.innerHTML = '<span class="ph">Done (no output)</span>';
+        }
+    } catch (e) {
+        let msg = String(e.message || e);
+        // Clean up error message
+        msg = msg.replace(/PythonError:\s*/g, '');
+        if (msg.includes('File "<exec>"')) {
+            const lines = msg.split('\n');
+            msg = lines.filter(l => !l.includes('File "<exec>"') && !l.includes('in __main__')).join('\n');
+        }
+        write('\nError: ' + msg.trim(), 'err');
+    } finally {
+        inputBox.innerHTML = '';
+        btn.disabled = false;
+        btn.textContent = 'Run';
+    }
+}
+
+function clr() {
+    document.getElementById('editor').value = '';
+    document.getElementById('editor').focus();
+}
+
+function ex(name) {
+    if (EX[name]) {
+        document.getElementById('editor').value = EX[name];
+        document.getElementById('output').innerHTML = '<span class="ph">Output here...</span>';
+        document.getElementById('inputBox').innerHTML = '';
+    }
+}
+
+document.getElementById('editor').onkeydown = function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (!document.getElementById('runBtn').disabled) run();
+    }
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        const el = e.target;
+        const s = el.selectionStart;
+        el.value = el.value.slice(0, s) + '    ' + el.value.slice(el.selectionEnd);
+        el.selectionStart = el.selectionEnd = s + 4;
+    }
+};
+
+init();
+</script>
+</body>
+</html>
