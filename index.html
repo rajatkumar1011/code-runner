@@ -71,11 +71,35 @@
         .made-with { font-size: 0.8rem; color: var(--text2); margin-bottom: 0.25rem; }
         .made-with .heart { color: #ef4444; }
         .copyright { font-size: 0.65rem; color: var(--text3); }
+
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; gap: 1rem; }
+        .logo { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); }
+        .tagline { font-size: 0.8rem; color: var(--text2); margin-top: 0.15rem; }
+        .top-right { display: flex; align-items: center; gap: 0.4rem; font-size: 0.7rem; color: var(--text3); }
+        .kbd { padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); background: rgba(0,0,0,0.4); font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; }
+        .kbd-label { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.65rem; color: var(--text2); }
+
+        .out-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 0.75rem; }
+        .out-actions { display: flex; gap: 0.4rem; }
+        .mini-btn { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--glass); color: var(--text3); font-size: 0.65rem; cursor: pointer; }
+        .mini-btn:hover { background: rgba(255,255,255,0.08); color: var(--text2); }
     </style>
 </head>
 <body>
 <div class="bg"></div>
 <div class="container">
+    <header class="topbar">
+        <div>
+            <div class="logo">PyRun</div>
+            <p class="tagline">Run Python in your browser with async input and a clean output console.</p>
+        </div>
+        <div class="top-right" title="Keyboard shortcut to run code">
+            <span class="kbd">Ctrl</span>
+            <span>+</span>
+            <span class="kbd">Enter</span>
+            <span class="kbd-label">Run</span>
+        </div>
+    </header>
     <main class="layout">
         <div class="panel">
             <div class="header">
@@ -98,7 +122,13 @@ print(f"Sum: {sum(nums)}")</textarea>
             </div>
         </div>
         <div class="out-section">
-            <div class="out-title">Output</div>
+            <div class="out-header">
+                <div class="out-title">Output</div>
+                <div class="out-actions">
+                    <button class="mini-btn" onclick="clearOutput()">Clear</button>
+                    <button class="mini-btn" onclick="copyOutput()">Copy</button>
+                </div>
+            </div>
             <div class="out-card" id="outCard">
                 <div id="output"><span class="ph">Output here...</span></div>
                 <div id="inputBox"></div>
@@ -128,6 +158,8 @@ print(f"Sum: {sum(nums)}")</textarea>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
 <script>
 let py = null;
+const LS_KEY = 'pyrun-code-v1';
+const editorEl = document.getElementById('editor');
 
 const EX = {
     hello: 'print("Hello World!")\nprint("Welcome to PyRun!")',
@@ -177,6 +209,13 @@ async function init() {
         });
         
         globalThis.browserInput = getInput;
+
+        try {
+            const saved = localStorage.getItem(LS_KEY);
+            if (saved) {
+                editorEl.value = saved;
+            }
+        } catch (e) {}
         
         document.getElementById('sDot').classList.add('ready');
         document.getElementById('sTxt').textContent = 'Ready';
@@ -191,7 +230,7 @@ async function init() {
 async function run() {
     if (!py) return;
     
-    const code = document.getElementById('editor').value;
+    const code = editorEl.value;
     const out = document.getElementById('output');
     const inputBox = document.getElementById('inputBox');
     const btn = document.getElementById('runBtn');
@@ -263,31 +302,57 @@ await __main__()
 }
 
 function clr() {
-    document.getElementById('editor').value = '';
-    document.getElementById('editor').focus();
+    editorEl.value = '';
+    editorEl.focus();
+    try {
+        localStorage.removeItem(LS_KEY);
+    } catch (e) {}
+}
+
+function clearOutput() {
+    document.getElementById('output').innerHTML = '<span class="ph">Output here...</span>';
+    document.getElementById('inputBox').innerHTML = '';
+}
+
+async function copyOutput() {
+    const text = document.getElementById('output').innerText;
+    if (!text.trim()) return;
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch (e) {
+        console.error(e);
+    }
 }
 
 function ex(name) {
     if (EX[name]) {
-        document.getElementById('editor').value = EX[name];
+        editorEl.value = EX[name];
         document.getElementById('output').innerHTML = '<span class="ph">Output here...</span>';
         document.getElementById('inputBox').innerHTML = '';
+        try {
+            localStorage.setItem(LS_KEY, EX[name]);
+        } catch (e) {}
     }
 }
 
-document.getElementById('editor').onkeydown = function(e) {
+editorEl.onkeydown = function(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         if (!document.getElementById('runBtn').disabled) run();
     }
     if (e.key === 'Tab') {
         e.preventDefault();
-        const el = e.target;
-        const s = el.selectionStart;
-        el.value = el.value.slice(0, s) + '    ' + el.value.slice(el.selectionEnd);
-        el.selectionStart = el.selectionEnd = s + 4;
+        const s = editorEl.selectionStart;
+        editorEl.value = editorEl.value.slice(0, s) + '    ' + editorEl.value.slice(editorEl.selectionEnd);
+        editorEl.selectionStart = editorEl.selectionEnd = s + 4;
     }
 };
+
+editorEl.addEventListener('input', function() {
+    try {
+        localStorage.setItem(LS_KEY, editorEl.value);
+    } catch (e) {}
+});
 
 init();
 </script>
